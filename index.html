@@ -11,47 +11,58 @@
     <body>
       <div id="root"></div>
      <!-- Авто-авторизация в Telegram WebApp -->
-      <!-- Диагностический маяк + авторизация через Telegram WebApp -->
+    <!-- Диагностический маяк + авторизация через Telegram WebApp (с фолбэком) -->
 <script>
 (function () {
-  // 0) Маяк: гарантированный GET в логи Railway при любом открытии страницы
+  // 0) Маяк: загрузка страницы
   new Image().src = 'https://hui-production.up.railway.app/api/twa/ping?from=indexhtml&ts=' + Date.now();
 
   try {
     var wa = window.Telegram && Telegram.WebApp;
-
-    // 1) Маяк: есть ли объект WebApp?
     new Image().src = 'https://hui-production.up.railway.app/api/twa/ping?wa=' + (wa ? 1 : 0);
+    if (!wa) return;
 
-    // 2) Если страница открыта НЕ через Telegram WebApp — дальше выходим
-    if (!wa || !wa.initData) return;
+    // чуть «раскрываем» WebApp и помечаем готовность
+    try { wa.ready(); wa.expand(); } catch (e) {}
 
-    // 3) Маяк: есть initData (значит точно в WebApp)
-    new Image().src = 'https://hui-production.up.railway.app/api/twa/ping?wa=1&init=1';
+    // 1) если есть «настоящий» initData — используем его
+    var hasInit = !!(wa.initData && wa.initData.length > 10);
+    new Image().src = 'https://hui-production.up.railway.app/api/twa/ping?init=' + (hasInit ? 1 : 0);
 
-    // 4) Авторизация на бэке
+    // 2) если initData пуст, соберём фолбэк из initDataUnsafe.user (это ок, пока SKIP_TWA_VERIFY=1 на бэке)
+    var initDataToSend;
+    if (hasInit) {
+      initDataToSend = wa.initData;
+    } else {
+      var unsafeUser = (wa.initDataUnsafe && wa.initDataUnsafe.user) || null;
+      if (!unsafeUser) return; // вообще нет данных — выходим
+      var u = encodeURIComponent(JSON.stringify(unsafeUser));
+      // формируем "псевдо-initData" (хеш фиктивный — в diag-режиме сервер примет)
+      initDataToSend = 'query_id=x&user=' + u + '&auth_date=0&hash=0';
+    }
+
+    // 3) авторизация на бэке
     fetch('https://hui-production.up.railway.app/api/twa/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData: wa.initData })
+      body: JSON.stringify({ initData: initDataToSend })
     })
-    .then(r => r.json())
-    .then(r => {
-      // 5) Маяк: результат auth
+    .then(function(r){ return r.json(); })
+    .then(function(r){
       new Image().src = 'https://hui-production.up.railway.app/api/twa/ping?auth=' + (r && r.ok ? 'ok' : 'fail');
       if (r && r.ok) {
         localStorage.setItem('grither_token', r.token || '');
         localStorage.setItem('grither_me', JSON.stringify(r.me || {}));
       }
     })
-    .catch(function(){ /*ignore*/ });
+    .catch(function(){ /* ignore */ });
 
   } catch (e) {
-    // 6) Маяк: ошибка JS
     new Image().src = 'https://hui-production.up.railway.app/api/twa/ping?err=1';
   }
 })();
 </script>
+
 
 <script>
 (function () {
