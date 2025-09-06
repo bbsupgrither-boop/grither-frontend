@@ -9,6 +9,39 @@
 
     <body>
       <div id="root"></div>
+     <!-- Авто-авторизация в Telegram WebApp -->
+<script>
+(function () {
+  try {
+    var wa = window.Telegram && Telegram.WebApp;
+    if (!wa || !wa.initData) return; // если открыто НЕ из Telegram — тихо выходим
+
+    // ПИНГ ДЛЯ ПРОВЕРКИ СВЯЗИ (увидишь в HTTP Logs)
+    fetch('https://hui-production.up.railway.app/api/twa/ping?from=netlify-indexhtml')
+      .catch(function(){});
+
+    // Сама авторизация
+    fetch('https://hui-production.up.railway.app/api/twa/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData: wa.initData })
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(r){
+        // чтобы видеть прямо в вебвью
+        try { console.log('AUTH RESULT', r); } catch(e) {}
+        if (r && r.ok) {
+          localStorage.setItem('grither_token', r.token || '');
+          localStorage.setItem('grither_me', JSON.stringify(r.me || {}));
+        }
+      })
+      .catch(function(){});
+  } catch (e) {
+    try { console.log('AUTH ERROR', e && e.message); } catch (_){}
+  }
+})();
+</script>
+
       <script type="module" src="/src/main.tsx"></script>
     </body>
   </html>
