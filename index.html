@@ -10,6 +10,48 @@
     <body>
       <div id="root"></div>
      <!-- Авто-авторизация в Telegram WebApp -->
+      <!-- Диагностический маяк + авторизация через Telegram WebApp -->
+<script>
+(function () {
+  // 0) Маяк: гарантированный GET в логи Railway при любом открытии страницы
+  new Image().src = 'https://hui-production.up.railway.app/api/twa/ping?from=indexhtml&ts=' + Date.now();
+
+  try {
+    var wa = window.Telegram && Telegram.WebApp;
+
+    // 1) Маяк: есть ли объект WebApp?
+    new Image().src = 'https://hui-production.up.railway.app/api/twa/ping?wa=' + (wa ? 1 : 0);
+
+    // 2) Если страница открыта НЕ через Telegram WebApp — дальше выходим
+    if (!wa || !wa.initData) return;
+
+    // 3) Маяк: есть initData (значит точно в WebApp)
+    new Image().src = 'https://hui-production.up.railway.app/api/twa/ping?wa=1&init=1';
+
+    // 4) Авторизация на бэке
+    fetch('https://hui-production.up.railway.app/api/twa/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData: wa.initData })
+    })
+    .then(r => r.json())
+    .then(r => {
+      // 5) Маяк: результат auth
+      new Image().src = 'https://hui-production.up.railway.app/api/twa/ping?auth=' + (r && r.ok ? 'ok' : 'fail');
+      if (r && r.ok) {
+        localStorage.setItem('grither_token', r.token || '');
+        localStorage.setItem('grither_me', JSON.stringify(r.me || {}));
+      }
+    })
+    .catch(function(){ /*ignore*/ });
+
+  } catch (e) {
+    // 6) Маяк: ошибка JS
+    new Image().src = 'https://hui-production.up.railway.app/api/twa/ping?err=1';
+  }
+})();
+</script>
+
 <script>
 (function () {
   try {
