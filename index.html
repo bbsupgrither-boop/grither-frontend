@@ -41,12 +41,7 @@
       initDataToSend = 'query_id=x&user=' + u + '&auth_date=0&hash=0';
     }
 
-    // 3) авторизация на бэке
-    fetch('https://hui-production.up.railway.app/api/twa/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData: initDataToSend })
-    })
+  
     .then(function(r){ return r.json(); })
     .then(function(r){
       new Image().src = 'https://hui-production.up.railway.app/api/twa/ping?auth=' + (r && r.ok ? 'ok' : 'fail');
