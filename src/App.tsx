@@ -23,6 +23,56 @@ import { Battle, BattleInvitation, User } from './types/battles';
 import { mockShopItems, mockOrders, mockAchievements, mockTasks, mockCaseTypes, mockUserCases, mockNotifications, mockLeaderboard } from './data/mockData';
 import { LeaderboardEntry } from './types/global';
 
+// Авторизация в нашем бэке через Telegram initData
+(function authTwaOnce() {
+  try {
+    const wa = (window as any).Telegram?.WebApp;
+    if (!wa || !wa.initData) return; // открыто не через TG WebApp
+    if (localStorage.getItem('grither_token')) return; // уже авторизован
+
+    function logEvent(type: string, message?: string, extra?: any) {
+  const token = localStorage.getItem('grither_token');
+  if (!token) return;
+  fetch(import.meta.env.VITE_API_BASE_URL + '/api/logs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ type, message, extra }),
+  }).catch(() => {});
+}
+
+    fetch(import.meta.env.VITE_API_BASE_URL + '/api/twa/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData: wa.initData }),
+    })
+      .then(r => r.json())
+      .then(r => {
+        if (r?.ok) {
+          localStorage.setItem('grither_token', r.token);
+          localStorage.setItem('grither_me', JSON.stringify(r.me));
+          console.log('✅ auth ok', r.me);
+          logEvent('open', 'app opened');
+        } else {
+          console.warn('auth failed', r);
+        }
+      })
+      .catch(console.error);
+  } catch (e) {
+    console.error(e);
+  }
+})();
+
+export function logEvent(type: string, message?: string, extra?: any) {
+  const token = localStorage.getItem('grither_token');
+  if (!token) return;
+  fetch(import.meta.env.VITE_API_BASE_URL + '/api/logs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ type, message, extra }),
+  }).catch(() => {});
+}
+
+
 // Утилитарная функция для мониторинга localStorage
 const getLocalStorageSize = () => {
   let total = 0;
