@@ -1,0 +1,12 @@
+[build]
+  command = "npm run build"
+  publish = "build"
+
+[build.environment]
+  VITE_API_BASE_URL = "https://hui-production.up.railway.app"
+
+# SPA-роутинг (важно для React/Vite)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
