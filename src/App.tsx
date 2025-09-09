@@ -1,3 +1,16 @@
+// Глобальные ошибки -> backend logs
+window.addEventListener('error', (e) => {
+  try {
+    // @ts-ignore
+    logEvent?.('error', e.message, { stack: e.error?.stack || null, src: e.filename, ln: e.lineno, col: e.colno });
+  } catch {}
+});
+window.addEventListener('unhandledrejection', (e: any) => {
+  try {
+    logEvent?.('unhandledrejection', String(e.reason?.message || e.reason || e), { reason: e.reason || null });
+  } catch {}
+});
+
 import { useState, useEffect, useRef } from 'react';
 import { HomePage } from './components/HomePage';
 import { useTelegram } from './src/utils/telegram'; // ✅ правильный путь (без ./src/)
