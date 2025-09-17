@@ -134,3 +134,51 @@ body {
 .icon-btn:hover {
   background: rgba(255,255,255,0.06);
 }
+
+/* --- Admin header: compact like Figma --- */
+.admin-header {
+  background: rgba(17, 24, 39, 0.8); /* bg-background/80 */
+  backdrop-filter: saturate(160%) blur(8px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.admin-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px; /* компактнее */
+}
+
+.admin-title {
+  line-height: 1.1;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.admin-subtitle {
+  color: #A7B0BD;     /* muted */
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.role-chip {
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 9999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #A7B0BD;
+}
+
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  padding: 6px;
+  border-radius: 10px;
+  transition: background .15s ease;
+}
+.icon-btn:hover { background: rgba(255,255,255,0.06); }
