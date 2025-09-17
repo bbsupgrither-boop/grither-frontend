@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { ModalOpaque } from './ModalOpaque';
 import { Switch } from './Switch';
 import { X, ChevronRight, Power, Paperclip, Eye, EyeOff, Shield, Bell, Palette, MessageCircle } from './Icons';
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
+
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -98,37 +100,57 @@ export function SettingsModal({ isOpen, onClose, isDarkMode, onToggleDarkMode, o
     setSelectedFile(null);
   };
 
-  const handleSecretCodeSubmit = () => {
-    if (telegramId && secretCode) {
-      // Проверяем валидность кода
-      const role = SECRET_CODES[secretCode];
-      if (role) {
-        // Проверяем наличие пользователя с таким ID
-        const user = ADMIN_USERS.find(u => 
-          u.telegramId === telegramId && u.role === role
-        );
-        
-        if (user) {
-          // Сохраняем данные в localStorage для передачи в AdminPanel
-          localStorage.setItem('adminLoginData', JSON.stringify({
-            telegramId,
-            accessCode: secretCode
-          }));
-          
-          // Устанавливаем флаг доступа к админ панели
-          setHasAdminAccess(true);
-          
-          // Закрываем модальное окно кода
-          setSecretCodeModalOpen(false);
-          // Сбрасываем поля
-          setTelegramId('');
-          setSecretCode('');
-        } else {
-          alert(`Пользователь с ID ${telegramId} не найден в роли "${role}"`);
-        }
-      } else {
-        alert('Неверный код доступа');
-      }
+ // было: проверка через SECRET_CODES и ADMIN_USERS
+// стало: запрос на бэкенд
+const handleSecretCodeSubmit = async () => {
+  if (!telegramId || !secretCode) {
+    alert('Введите Telegram ID и код доступа');
+    return;
+  }
+
+  try {
+    // зовём наш бэк: tg_user_id = Telegram ID, password = код доступа
+    const res = await fetch(`${API_BASE}/api/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tg_user_id: Number(telegramId),
+        password: secretCode,
+      }),
+    });
+
+    const data = await res.json().catch(() => ({} as any));
+
+    if (!res.ok || !data?.ok) {
+      // полностью повторяем прежнее поведение: тот же алерт
+      alert('Неверный код доступа');
+      return;
+    }
+
+    // УСПЕШНЫЙ ВХОД:
+    // 1) кладём админ-токен и роль — пригодится в AdminPanel/дальше
+    localStorage.setItem('grither_admin_token', data.token);
+    localStorage.setItem('grither_admin_role', data.role);
+
+    // 2) оставим совместимость с существующей логикой:
+    //    прежний код ждал adminLoginData — положим и его
+    localStorage.setItem('adminLoginData', JSON.stringify({
+      telegramId,
+      accessCode: secretCode,
+    }));
+
+    // 3) включаем доступ — ЭТО И ДАЁТ появление пункта «Админ панель»
+    setHasAdminAccess(true);
+
+    // 4) закрываем модалку и чистим поля (как раньше)
+    setSecretCodeModalOpen(false);
+    setTelegramId('');
+    setSecretCode('');
+  } catch {
+    alert('Сеть недоступна. Повторите чуть позже.');
+  }
+};
+
     }
   };
 
