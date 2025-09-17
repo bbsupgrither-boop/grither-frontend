@@ -43,6 +43,8 @@ import {
   mockLeaderboard
 } from './data/mockData';
 import { LeaderboardEntry } from './types/global';
+import './admin-fixes.css';
+
 
 /** 
  * Отправка события/лога на бэкенд.
