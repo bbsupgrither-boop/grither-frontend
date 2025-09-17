@@ -1,8 +1,8 @@
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
 import { useState, useEffect } from 'react';
 import { ModalOpaque } from './ModalOpaque';
 import { Switch } from './Switch';
 import { X, ChevronRight, Power, Paperclip, Eye, EyeOff, Shield, Bell, Palette, MessageCircle } from './Icons';
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 
 interface SettingsModalProps {
@@ -100,16 +100,14 @@ export function SettingsModal({ isOpen, onClose, isDarkMode, onToggleDarkMode, o
     setSelectedFile(null);
   };
 
- // было: проверка через SECRET_CODES и ADMIN_USERS
-// стало: запрос на бэкенд
+// Проверка через бэкенд: Telegram ID + код (пароль) → /api/admin/login
 const handleSecretCodeSubmit = async () => {
   if (!telegramId || !secretCode) {
-    alert('Введите Telegram ID и код доступа');
+    window.alert('Введите Telegram ID и код доступа');
     return;
   }
 
   try {
-    // зовём наш бэк: tg_user_id = Telegram ID, password = код доступа
     const res = await fetch(`${API_BASE}/api/admin/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -119,40 +117,37 @@ const handleSecretCodeSubmit = async () => {
       }),
     });
 
-    const data = await res.json().catch(() => ({} as any));
+    const data: { ok?: boolean; role?: string; token?: string; error?: string } =
+      await res.json().catch(() => ({} as any));
 
     if (!res.ok || !data?.ok) {
-      // полностью повторяем прежнее поведение: тот же алерт
-      alert('Неверный код доступа');
+      // Сохраняем поведение, к которому вы привыкли
+      window.alert('Неверный код доступа');
       return;
     }
 
-    // УСПЕШНЫЙ ВХОД:
-    // 1) кладём админ-токен и роль — пригодится в AdminPanel/дальше
-    localStorage.setItem('grither_admin_token', data.token);
-    localStorage.setItem('grither_admin_role', data.role);
+    // Успех: кладём токен/роль (для будущих запросов и прав)
+    localStorage.setItem('grither_admin_token', data.token || '');
+    localStorage.setItem('grither_admin_role', data.role || '');
 
-    // 2) оставим совместимость с существующей логикой:
-    //    прежний код ждал adminLoginData — положим и его
+    // Совместимость с текущей логикой (пункт «Админ панель» зависит от этого)
     localStorage.setItem('adminLoginData', JSON.stringify({
       telegramId,
       accessCode: secretCode,
     }));
 
-    // 3) включаем доступ — ЭТО И ДАЁТ появление пункта «Админ панель»
+    // Это включает отображение пункта «Админ панель» в настройках
     setHasAdminAccess(true);
 
-    // 4) закрываем модалку и чистим поля (как раньше)
+    // Закрываем модалку и очищаем поля
     setSecretCodeModalOpen(false);
     setTelegramId('');
     setSecretCode('');
   } catch {
-    alert('Сеть недоступна. Повторите чуть позже.');
+    window.alert('Сеть недоступна. Повторите позже.');
   }
 };
 
-    }
-  };
 
   const settingsItems = [
     {
