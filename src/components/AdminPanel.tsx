@@ -253,46 +253,50 @@ export function AdminPanel({
     <div className="admin-shell">
       {/* ШАПКА */}
       <header className="admin-header">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-              <Shield
-                className="w-6 h-6 text-primary cursor-pointer transition-transform hover:scale-110"
-                onDoubleClick={onToggleDarkMode}
-                title="Двойной клик для смены темы"
-              />
-            </div>
-            <div>
-              <h1 className="text-lg font-medium text-foreground">Панель управления</h1>
-              <p className="text-sm text-muted-foreground">
-                {getRoleDisplayName(userRole || '')}
-              </p>
-            </div>
-          </div>
+  <div className="admin-header-inner">
+    {/* Иконка-щит */}
+    <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+      <Shield
+        className="w-4 h-4 text-primary cursor-pointer transition-transform hover:scale-110"
+        onDoubleClick={onToggleDarkMode}
+        title="Двойной клик для смены темы"
+      />
+    </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-xs px-2 py-1 rounded-full border border-border/30 text-foreground/80">
-              Роль: {getRoleDisplayName(userRole || '')}
-            </span>
-            <button
-              onClick={adminLogout}
-              className="px-3 py-1 rounded-md border text-sm hover:bg-black/5"
-              title="Выйти из админки"
-            >
-              Выйти
-            </button>
-            <button
-              onClick={handleBackToMain}
-              className="p-2 hover:bg-black/5 rounded-lg transition-colors"
-              title="Закрыть админку"
-            >
-              <X className="w-5 h-5 text-foreground/70" />
-            </button>
-          </div>
-        </div>
-        {/* Если у тебя есть AdminNavigation — можно вывести его тут под шапкой */}
-        {/* <AdminNavigation current={currentAdminPage} onNavigate={setCurrentAdminPage} /> */}
-      </header>
+    {/* Заголовок + подзаголовок */}
+    <div>
+      <h1 className="admin-title text-base font-semibold text-foreground">
+        Панель управления
+      </h1>
+      <div className="admin-subtitle">
+        {getRoleDisplayName(userRole || '')}
+      </div>
+    </div>
+
+    {/* Справа: роль маленьким чипом + выход + закрыть */}
+    <div className="header-actions">
+      <span className="role-chip">
+        {getRoleDisplayName(userRole || '')}
+      </span>
+      <button
+        onClick={adminLogout}
+        className="icon-btn text-sm"
+        title="Выйти из админки"
+      >
+        Выйти
+      </button>
+      <button
+        onClick={handleBackToMain}
+        className="icon-btn"
+        title="Закрыть админку"
+      >
+        <X className="w-4 h-4 text-foreground/70" />
+      </button>
+    </div>
+  </div>
+  {/* Если используете нижнюю навигацию — оставим её на следующий шаг */}
+</header>
+
 
       {/* КОНТЕНТ */}
       <main className="admin-content">
