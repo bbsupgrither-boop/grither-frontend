@@ -94,3 +94,43 @@ body {
 * {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* --- Admin header closer to Figma --- */
+.admin-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.admin-title {
+  line-height: 1.1;
+}
+.admin-subtitle {
+  color: var(--admin-muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.role-chip {
+  border: 1px solid var(--admin-border);
+  border-radius: 9999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--admin-muted);
+}
+
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  padding: 6px;
+  border-radius: 10px;
+}
+.icon-btn:hover {
+  background: rgba(255,255,255,0.06);
+}
