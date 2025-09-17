@@ -8,6 +8,115 @@
       <title>Макет приложения для Telegram (Copy) (Copy)</title>
     </head>
 
+    <script>
+(function () {
+  const API_BASE = (window?.import?.meta && window.import.meta.env?.VITE_API_BASE_URL) || "https://hui-production.up.railway.app";
+
+  // маленький помощник: находит в модалке элементы
+  function findAdminModalElements(root) {
+    // Поле ID: сначала пробуем input[type=number], потом по placeholder/label
+    const idInput =
+      root.querySelector('input[type="number"]') ||
+      [...root.querySelectorAll('input,textarea')].find(el =>
+        /telegram\s*id|id/i.test(el.placeholder || el.ariaLabel || "")
+      );
+
+    // Поле пароль: input[type=password] или по placeholder/label
+    const passInput =
+      root.querySelector('input[type="password"]') ||
+      [...root.querySelectorAll('input,textarea')].find(el =>
+        /парол|password|код доступа/i.test(el.placeholder || el.ariaLabel || "")
+      );
+
+    // Кнопка войти: по тексту
+    const loginBtn =
+      [...root.querySelectorAll('button,[role="button"],input[type="submit"]')].find(el =>
+        /войти|login|админ/i.test((el.innerText || el.value || "").trim())
+      );
+
+    // Блок для ошибок (если есть) — иначе создадим сами
+    let errorBox =
+      root.querySelector('[data-admin-error]') ||
+      [...root.querySelectorAll('*')].find(el => /ошиб|error/i.test(el.className || el.id || ""));
+
+    if (!errorBox) {
+      errorBox = document.createElement('div');
+      errorBox.setAttribute('data-admin-error', '1');
+      errorBox.style.cssText = "color:#c00;font-size:12px;margin-top:8px;";
+      // вставим рядом с кнопкой
+      loginBtn && loginBtn.parentElement && loginBtn.parentElement.appendChild(errorBox);
+    }
+
+    return { idInput, passInput, loginBtn, errorBox };
+  }
+
+  // навешиваем обработчик один раз
+  function attachLoginHandler(modalRoot) {
+    const { idInput, passInput, loginBtn, errorBox } = findAdminModalElements(modalRoot);
+    if (!idInput || !passInput || !loginBtn) return false;
+    if (loginBtn.__gritherBound) return true; // уже навешан
+
+    async function doLogin(e) {
+      e?.preventDefault?.();
+      errorBox && (errorBox.textContent = "");
+      const idNum = Number(String(idInput.value || "").trim());
+      const pwd = String(passInput.value || "").trim();
+      if (!idNum || !pwd) {
+        if (errorBox) errorBox.textContent = "Введите Telegram ID и пароль";
+        return;
+      }
+      try {
+        const rsp = await fetch(`${API_BASE}/api/admin/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tg_user_id: idNum, password: pwd })
+        });
+        const data = await rsp.json().catch(() => ({}));
+        if (!rsp.ok || !data?.ok) {
+          if (errorBox) errorBox.textContent = (data?.error === "bad_credentials")
+            ? "Неверный ID или пароль"
+            : "Ошибка входа";
+          return;
+        }
+        localStorage.setItem("grither_admin_token", data.token);
+        localStorage.setItem("grither_admin_role", data.role);
+        // можно закрыть модалку — пробуем кликнуть по кнопке закрытия, если есть
+        const closeBtn = modalRoot.querySelector('[data-close], [aria-label="Close"], .close, [data-state="open"]~button');
+        closeBtn && closeBtn.click();
+        // уведомим приложение (если кто-то слушает)
+        window.dispatchEvent(new CustomEvent("grither:admin:login", { detail: { role: data.role } }));
+      } catch {
+        if (errorBox) errorBox.textContent = "Сеть недоступна";
+      }
+    }
+
+    loginBtn.addEventListener('click', doLogin);
+    passInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(e); });
+    loginBtn.__gritherBound = true;
+    return true;
+  }
+
+  // Следим за появлением модалки в DOM
+  const obs = new MutationObserver((muts) => {
+    for (const m of muts) {
+      for (const node of m.addedNodes) {
+        if (!(node instanceof HTMLElement)) continue;
+        // ищем большие оверлеи/диалоги
+        if (node.matches?.('dialog,[role="dialog"],[data-state="open"],.fixed,.modal,.overlay')) {
+          attachLoginHandler(node);
+        }
+        // и глубже
+        node.querySelectorAll?.('dialog,[role="dialog"],[data-state="open"],.fixed,.modal,.overlay')
+          .forEach(el => attachLoginHandler(el));
+      }
+    }
+  });
+
+  obs.observe(document.documentElement, { childList: true, subtree: true });
+})();
+</script>
+
+    
     <body>
       <div id="root"></div>
      <!-- Авто-авторизация в Telegram WebApp -->
