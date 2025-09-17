@@ -113,22 +113,40 @@
           }
           return;
         }
-        // успех: сохраняем токен и роль
-        localStorage.setItem("grither_admin_token", data.token);
-        localStorage.setItem("grither_admin_role", data.role);
+// успех: сохраняем токен и роль
+localStorage.setItem("grither_admin_token", data.token);
+localStorage.setItem("grither_admin_role", data.role);
 
-        // закрываем модалку (ищем крестик/кнопку закрытия)
-        const closeBtn =
-          modalRoot.querySelector('[aria-label="Close"], [data-dialog-close], .close, [data-state="open"]~button');
-        if (closeBtn) closeBtn.click();
+// визуально покажем успех (зелёным)
+if (errorBox) {
+  errorBox.style.color = "#0a7c2f";
+  errorBox.textContent = "Вход выполнен. Роль: " + data.role;
+}
 
-        // уведомим приложение (если слушают)
-        window.dispatchEvent(new CustomEvent("grither:admin:login", { detail: { role: data.role } }));
-      } catch {
-        if (errorBox) errorBox.textContent = "Сеть недоступна";
-      }
-    }
+// ПЛАН А: закрыть модалку «по-правильному»
+try {
+  const closeBtn =
+    modalRoot.querySelector('[aria-label="Close"], [data-dialog-close], .close, [data-state="open"]~button');
+  if (closeBtn) closeBtn.click();
+} catch {}
 
+// ПЛАН Б: если Фигма не закрыла — удалим модалку жёстко
+try { modalRoot.remove(); } catch {}
+try {
+  document.querySelectorAll('dialog[open], [role="dialog"], .modal, .overlay').forEach(el => {
+    try { if (el.contains && el.contains(btn)) el.remove(); } catch {}
+  });
+} catch {}
+
+// Сообщим приложению (если кто-то слушает)
+try {
+  window.dispatchEvent(new CustomEvent("grither:admin:login", { detail: { role: data.role } }));
+} catch {}
+
+// Перезагружаем, чтобы приложение точно подхватило токен из localStorage
+setTimeout(() => { location.reload(); }, 600);
+
+return; // на всякий случай завершаем doLogin здесь
     // Вешаем наш обработчик
     btn.addEventListener("click", doLogin, { capture: true });
     passInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(e); }, { capture: true });
