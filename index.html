@@ -10,14 +10,25 @@
 
     <script>
 (function () {
-  // База бэка
   const API_BASE =
     (window?.import?.meta && window.import.meta.env?.VITE_API_BASE_URL) ||
     window.VITE_API_BASE_URL ||
     "https://hui-production.up.railway.app";
 
-  // Находим элементы в модалке
-  function findAdminModalElements(root) {
+  // 1) Глушим старый alert про «Неверный код доступа», чтобы он не мешал
+  const nativeAlert = window.alert;
+  window.alert = function (msg) {
+    try {
+      if (typeof msg === "string" && /неверн(ый|ая).*(код|доступ)/i.test(msg)) {
+        console.warn("[admin] blocked legacy alert:", msg);
+        return; // проглатываем
+      }
+    } catch {}
+    return nativeAlert.apply(this, arguments);
+  };
+
+  // 2) Находим элементы в модалке
+  function findEls(root) {
     const idInput =
       root.querySelector('input[type="number"]') ||
       [...root.querySelectorAll('input,textarea')].find(el =>
@@ -30,13 +41,11 @@
         /(парол|password|код\s*доступа)/i.test(el.placeholder || el.ariaLabel || el.name || el.id || "")
       );
 
-    // Кнопка «Войти в админку»
     const loginBtn =
       [...root.querySelectorAll('button,[role="button"],input[type="submit"]')].find(el =>
         /(войти\s*в\s*админку|войти|login)/i.test((el.innerText || el.value || "").trim())
       );
 
-    // Контейнер для ошибок (создадим, если нет)
     let errorBox =
       root.querySelector('[data-admin-error]') ||
       [...root.querySelectorAll('*')].find(el => /error|ошиб/i.test(el.className || el.id || ""));
@@ -50,131 +59,99 @@
     return { idInput, passInput, loginBtn, errorBox };
   }
 
-  // Снимаем старые обработчики Фигмы и «разблокируем» кнопку
-  function stripHandlersAndEnable(el) {
-    const clone = el.cloneNode(true);
-    clone.removeAttribute("disabled");
-    clone.removeAttribute("aria-disabled");
-    clone.style.pointerEvents = "auto";
-    clone.style.opacity = "";
-    el.parentNode && el.parentNode.replaceChild(clone, el);
-    return clone;
-  }
+  // 3) Логин: общий обработчик
+  async function doLogin(modalRoot, idInput, passInput, errorBox, btn) {
+    if (errorBox) { errorBox.style.color = "#ff6b6b"; errorBox.textContent = ""; }
 
-  function attachLoginHandler(modalRoot) {
-    const { idInput, passInput, loginBtn, errorBox } = findAdminModalElements(modalRoot);
-    if (!idInput || !passInput || !loginBtn) return false;
-    if (loginBtn.__gritherBound) return true;
-
-    const btn = stripHandlersAndEnable(loginBtn);
-
-    // Активируем/деактивируем кнопку в зависимости от заполненности
-    function updateState() {
-      const hasId = String(idInput.value || "").trim().length > 0;
-      const hasPw = String(passInput.value || "").trim().length > 0;
-      const ok = hasId && hasPw;
-      if (ok) {
-        btn.removeAttribute("disabled");
-        btn.removeAttribute("aria-disabled");
-        btn.style.pointerEvents = "auto";
-        btn.style.opacity = "";
-      } else {
-        btn.setAttribute("disabled", "true");
-        btn.setAttribute("aria-disabled", "true");
-        btn.style.pointerEvents = "none";
-        btn.style.opacity = "0.6";
-      }
+    const idNum = Number(String(idInput?.value ?? "").trim());
+    const pwd   = String(passInput?.value ?? "").trim();
+    if (!idNum || !pwd) {
+      if (errorBox) errorBox.textContent = "Введите Telegram ID и пароль";
+      return;
     }
-    updateState();
-    idInput.addEventListener("input", updateState, { capture: true });
-    passInput.addEventListener("input", updateState, { capture: true });
 
-    async function doLogin(e) {
-      e?.preventDefault?.();
-      e?.stopPropagation?.();
-      e?.stopImmediatePropagation?.();
-      if (errorBox) errorBox.textContent = "";
+    try {
+      const rsp = await fetch(`${API_BASE}/api/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tg_user_id: idNum, password: pwd })
+      });
+      const data = await rsp.json().catch(() => ({}));
+      if (!rsp.ok || !data?.ok) {
+        if (errorBox) errorBox.textContent =
+          data?.error === "bad_credentials" ? "Неверный ID или пароль" : "Ошибка входа";
+        return;
+      }
 
-      const idNum = Number(String(idInput.value || "").trim());
-      const pwd = String(passInput.value || "").trim();
-      if (!idNum || !pwd) { updateState(); return; }
+      // успех
+      localStorage.setItem("grither_admin_token", data.token);
+      localStorage.setItem("grither_admin_role", data.role);
+      if (errorBox) { errorBox.style.color = "#0a7c2f"; errorBox.textContent = "Вход выполнен. Роль: " + data.role; }
 
+      // закрыть модалку
       try {
-        const rsp = await fetch(`${API_BASE}/api/admin/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tg_user_id: idNum, password: pwd })
+        const closeBtn =
+          modalRoot?.querySelector('[aria-label="Close"], [data-dialog-close], .close, [data-state="open"]~button');
+        closeBtn && closeBtn.click();
+      } catch {}
+      try { modalRoot?.remove(); } catch {}
+      try {
+        document.querySelectorAll('dialog[open], [role="dialog"], .modal, .overlay').forEach(el => {
+          try { if (btn && el.contains(btn)) el.remove(); } catch {}
         });
-        const data = await rsp.json().catch(() => ({}));
-        if (!rsp.ok || !data?.ok) {
-          if (errorBox) {
-            errorBox.textContent =
-              data?.error === "bad_credentials" ? "Неверный ID или пароль" : "Ошибка входа";
-          }
-          return;
-        }
-// успех: сохраняем токен и роль
-localStorage.setItem("grither_admin_token", data.token);
-localStorage.setItem("grither_admin_role", data.role);
+      } catch {}
 
-// визуально покажем успех (зелёным)
-if (errorBox) {
-  errorBox.style.color = "#0a7c2f";
-  errorBox.textContent = "Вход выполнен. Роль: " + data.role;
-}
-
-// ПЛАН А: закрыть модалку «по-правильному»
-try {
-  const closeBtn =
-    modalRoot.querySelector('[aria-label="Close"], [data-dialog-close], .close, [data-state="open"]~button');
-  if (closeBtn) closeBtn.click();
-} catch {}
-
-// ПЛАН Б: если Фигма не закрыла — удалим модалку жёстко
-try { modalRoot.remove(); } catch {}
-try {
-  document.querySelectorAll('dialog[open], [role="dialog"], .modal, .overlay').forEach(el => {
-    try { if (el.contains && el.contains(btn)) el.remove(); } catch {}
-  });
-} catch {}
-
-// Сообщим приложению (если кто-то слушает)
-try {
-  window.dispatchEvent(new CustomEvent("grither:admin:login", { detail: { role: data.role } }));
-} catch {}
-
-// Перезагружаем, чтобы приложение точно подхватило токен из localStorage
-setTimeout(() => { location.reload(); }, 600);
-
-return; // на всякий случай завершаем doLogin здесь
-    // Вешаем наш обработчик
-    btn.addEventListener("click", doLogin, { capture: true });
-    passInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(e); }, { capture: true });
-    btn.__gritherBound = true;
-
-    // Блокируем submit формы фигмы, если он есть
-    const form = btn.closest("form");
-    if (form && !form.__gritherBound) {
-      form.addEventListener("submit", (e) => { e.preventDefault(); e.stopPropagation(); doLogin(e); }, { capture: true });
-      form.__gritherBound = true;
+      // событие + перезагрузка
+      try { window.dispatchEvent(new CustomEvent("grither:admin:login", { detail: { role: data.role } })); } catch {}
+      setTimeout(() => location.reload(), 600);
+    } catch {
+      if (errorBox) errorBox.textContent = "Сеть недоступна";
     }
-    return true;
   }
 
-  // Следим за появлением модалки
-  const obs = new MutationObserver((muts) => {
-    for (const m of muts) {
-      for (const node of m.addedNodes) {
-        if (!(node instanceof HTMLElement)) continue;
-        if (node.matches?.('dialog,[role="dialog"],[data-state="open"],.modal,.overlay,.fixed')) {
-          attachLoginHandler(node);
-        }
-        node.querySelectorAll?.('dialog,[role="dialog"],[data-state="open"],.modal,.overlay,.fixed')
-          .forEach(el => attachLoginHandler(el));
-      }
-    }
-  });
-  obs.observe(document.documentElement, { childList: true, subtree: true });
+  // 4) Агрессивный перехват клика: на уровне документа (capture), раньше Фигмы
+  document.addEventListener("click", function onDocClick(e) {
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    // Ищем ближайший диалог/оверлей и кнопку «Войти»
+    const modalRoot = target.closest('dialog,[role="dialog"],[data-state="open"],.modal,.overlay,.fixed') || document.body;
+    const { idInput, passInput, loginBtn, errorBox } = findEls(modalRoot);
+    if (!loginBtn) return;
+
+    const isLoginBtn = target === loginBtn || loginBtn.contains(target);
+    if (!isLoginBtn) return;
+
+    // Останавливаем ВСЁ и логиним сами
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    // делаем кнопку активной, если Фигма её глушит
+    try {
+      loginBtn.removeAttribute("disabled");
+      loginBtn.removeAttribute("aria-disabled");
+      loginBtn.style.pointerEvents = "auto";
+      loginBtn.style.opacity = "";
+    } catch {}
+
+    doLogin(modalRoot, idInput, passInput, errorBox, loginBtn);
+  }, true); // <<< capture = true
+
+  // 5) Перехватываем Enter в поле пароля (capture)
+  document.addEventListener("keydown", function onKey(e) {
+    if (e.key !== "Enter") return;
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return;
+    const modalRoot = active.closest('dialog,[role="dialog"],[data-state="open"],.modal,.overlay,.fixed');
+    if (!modalRoot) return;
+
+    const { idInput, passInput, loginBtn, errorBox } = findEls(modalRoot);
+    if (!passInput || active !== passInput) return;
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    doLogin(modalRoot, idInput, passInput, errorBox, loginBtn);
+  }, true);
+
 })();
 </script>
 
