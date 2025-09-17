@@ -10,22 +10,24 @@
 
     <script>
 (function () {
+  // База бэка
   const API_BASE =
     (window?.import?.meta && window.import.meta.env?.VITE_API_BASE_URL) ||
+    window.VITE_API_BASE_URL ||
     "https://hui-production.up.railway.app";
 
+  // Находим элементы в модалке
   function findAdminModalElements(root) {
-    // Поля
     const idInput =
       root.querySelector('input[type="number"]') ||
       [...root.querySelectorAll('input,textarea')].find(el =>
-        /telegram\s*id|^id$/i.test(el.placeholder || el.ariaLabel || el.name || "")
+        /telegram\s*id|^id$/i.test(el.placeholder || el.ariaLabel || el.name || el.id || "")
       );
 
     const passInput =
       root.querySelector('input[type="password"]') ||
       [...root.querySelectorAll('input,textarea')].find(el =>
-        /(парол|password|код\s*доступа)/i.test(el.placeholder || el.ariaLabel || el.name || "")
+        /(парол|password|код\s*доступа)/i.test(el.placeholder || el.ariaLabel || el.name || el.id || "")
       );
 
     // Кнопка «Войти в админку»
@@ -34,7 +36,7 @@
         /(войти\s*в\s*админку|войти|login)/i.test((el.innerText || el.value || "").trim())
       );
 
-    // Контейнер для ошибки (если нет — создадим под кнопкой)
+    // Контейнер для ошибок (создадим, если нет)
     let errorBox =
       root.querySelector('[data-admin-error]') ||
       [...root.querySelectorAll('*')].find(el => /error|ошиб/i.test(el.className || el.id || ""));
@@ -48,9 +50,13 @@
     return { idInput, passInput, loginBtn, errorBox };
   }
 
-  // Снимаем старые слушатели Фигмы: клонируем кнопку и подменяем её
-  function stripHandlers(el) {
+  // Снимаем старые обработчики Фигмы и «разблокируем» кнопку
+  function stripHandlersAndEnable(el) {
     const clone = el.cloneNode(true);
+    clone.removeAttribute("disabled");
+    clone.removeAttribute("aria-disabled");
+    clone.style.pointerEvents = "auto";
+    clone.style.opacity = "";
     el.parentNode && el.parentNode.replaceChild(clone, el);
     return clone;
   }
@@ -60,22 +66,38 @@
     if (!idInput || !passInput || !loginBtn) return false;
     if (loginBtn.__gritherBound) return true;
 
-    // Удаляем встроенные обработчики фигмы
-    const btn = stripHandlers(loginBtn);
+    const btn = stripHandlersAndEnable(loginBtn);
+
+    // Активируем/деактивируем кнопку в зависимости от заполненности
+    function updateState() {
+      const hasId = String(idInput.value || "").trim().length > 0;
+      const hasPw = String(passInput.value || "").trim().length > 0;
+      const ok = hasId && hasPw;
+      if (ok) {
+        btn.removeAttribute("disabled");
+        btn.removeAttribute("aria-disabled");
+        btn.style.pointerEvents = "auto";
+        btn.style.opacity = "";
+      } else {
+        btn.setAttribute("disabled", "true");
+        btn.setAttribute("aria-disabled", "true");
+        btn.style.pointerEvents = "none";
+        btn.style.opacity = "0.6";
+      }
+    }
+    updateState();
+    idInput.addEventListener("input", updateState, { capture: true });
+    passInput.addEventListener("input", updateState, { capture: true });
 
     async function doLogin(e) {
       e?.preventDefault?.();
       e?.stopPropagation?.();
       e?.stopImmediatePropagation?.();
-
       if (errorBox) errorBox.textContent = "";
 
       const idNum = Number(String(idInput.value || "").trim());
       const pwd = String(passInput.value || "").trim();
-      if (!idNum || !pwd) {
-        if (errorBox) errorBox.textContent = "Введите Telegram ID и пароль";
-        return;
-      }
+      if (!idNum || !pwd) { updateState(); return; }
 
       try {
         const rsp = await fetch(`${API_BASE}/api/admin/login`, {
@@ -85,26 +107,29 @@
         });
         const data = await rsp.json().catch(() => ({}));
         if (!rsp.ok || !data?.ok) {
-          if (errorBox) errorBox.textContent =
-            data?.error === "bad_credentials" ? "Неверный ID или пароль" : "Ошибка входа";
+          if (errorBox) {
+            errorBox.textContent =
+              data?.error === "bad_credentials" ? "Неверный ID или пароль" : "Ошибка входа";
+          }
           return;
         }
+        // успех: сохраняем токен и роль
         localStorage.setItem("grither_admin_token", data.token);
         localStorage.setItem("grither_admin_role", data.role);
 
-        // Закрыть модалку — кликаем по крестику, если есть
+        // закрываем модалку (ищем крестик/кнопку закрытия)
         const closeBtn =
           modalRoot.querySelector('[aria-label="Close"], [data-dialog-close], .close, [data-state="open"]~button');
         if (closeBtn) closeBtn.click();
 
-        // Сообщим приложению (если кто-то слушает)
+        // уведомим приложение (если слушают)
         window.dispatchEvent(new CustomEvent("grither:admin:login", { detail: { role: data.role } }));
       } catch {
         if (errorBox) errorBox.textContent = "Сеть недоступна";
       }
     }
 
-    // Навешиваем наш обработчик
+    // Вешаем наш обработчик
     btn.addEventListener("click", doLogin, { capture: true });
     passInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(e); }, { capture: true });
     btn.__gritherBound = true;
@@ -115,7 +140,6 @@
       form.addEventListener("submit", (e) => { e.preventDefault(); e.stopPropagation(); doLogin(e); }, { capture: true });
       form.__gritherBound = true;
     }
-
     return true;
   }
 
@@ -135,6 +159,7 @@
   obs.observe(document.documentElement, { childList: true, subtree: true });
 })();
 </script>
+
 
 
     
