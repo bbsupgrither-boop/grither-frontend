@@ -1,0 +1,96 @@
+/* ===== Admin baseline fixes for Telegram WebApp ===== */
+
+/* 1) Гладкий текст и нормальный базовый размер */
+html, body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+:root {
+  --admin-bg: #0b1220;           /* тёмный фон, как в фигме */
+  --admin-card: #111827;         /* карточки/панели */
+  --admin-border: rgba(255,255,255,0.06);
+  --admin-text: #E8ECF2;
+  --admin-muted: #A7B0BD;
+  --admin-accent: #2B82FF;       /* синий для «Админ панели» */
+  --admin-success: #10b981;
+  --admin-danger: #ef4444;
+}
+
+/* 2) Высота экрана в Telegram webview (фикс 100vh) */
+html, body, #root {
+  height: 100%;
+}
+body {
+  background: var(--admin-bg);
+  color: var(--admin-text);
+}
+
+/* 3) Унификация кнопок (визуально ближе к фигме) */
+.btn-admin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--admin-border);
+  background: #0f172a;
+  color: var(--admin-text);
+  transition: transform .08s ease, background .2s ease, opacity .2s ease;
+}
+.btn-admin:hover { transform: translateY(-1px); }
+.btn-admin:active { transform: translateY(0); opacity: .9; }
+.btn-admin[disabled],
+.btn-admin[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+
+/* Варианты */
+.btn-admin--primary { background: var(--admin-accent); border-color: var(--admin-accent); color: #fff; }
+.btn-admin--ghost   { background: transparent; }
+
+/* 4) Инпуты как в фигме */
+.input-admin {
+  width: 100%;
+  height: 44px;
+  border-radius: 12px;
+  background: #202734;
+  border: 1px solid var(--admin-border);
+  color: var(--admin-text);
+  padding: 0 12px;
+  font-size: 14px;
+  outline: none;
+}
+.input-admin::placeholder { color: var(--admin-muted); }
+
+/* 5) Карточки/панели */
+.card-admin {
+  background: var(--admin-card);
+  border: 1px solid var(--admin-border);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+}
+
+/* 6) Шапка админки: фиксируем, контент — скролл */
+.admin-shell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.admin-header {
+  position: sticky; top: 0; z-index: 40;
+  backdrop-filter: saturate(180%) blur(8px);
+  background: rgba(17,24,39,0.7);
+  border-bottom: 1px solid var(--admin-border);
+}
+.admin-content {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 16px;
+}
+
+/* 7) Убираем синий тап-блик и серый выделитель iOS */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
