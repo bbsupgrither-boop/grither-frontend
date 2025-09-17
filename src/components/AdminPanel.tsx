@@ -252,9 +252,9 @@ export function AdminPanel({
   return (
     <div className="admin-shell">
       {/* ШАПКА */}
-      <header className="admin-header">
+      <header className="admin-header fixed top-0 left-0 right-0 z-40">
   <div className="admin-header-inner">
-    {/* Иконка-щит */}
+    {/* Иконка-щит слева */}
     <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
       <Shield
         className="w-4 h-4 text-primary cursor-pointer transition-transform hover:scale-110"
@@ -265,21 +265,23 @@ export function AdminPanel({
 
     {/* Заголовок + подзаголовок */}
     <div>
-      <h1 className="admin-title text-base font-semibold text-foreground">
-        Панель управления
-      </h1>
-      <div className="admin-subtitle">
-        {getRoleDisplayName(userRole || '')}
-      </div>
+      <div className="admin-title text-foreground">Панель управления</div>
+      <div className="admin-subtitle">{getRoleDisplayName(userRole || '')}</div>
     </div>
 
-    {/* Справа: роль маленьким чипом + выход + закрыть */}
+    {/* Справа: чип роли + «Выйти» + крестик */}
     <div className="header-actions">
-      <span className="role-chip">
-        {getRoleDisplayName(userRole || '')}
-      </span>
+      <span className="role-chip">{getRoleDisplayName(userRole || '')}</span>
       <button
-        onClick={adminLogout}
+        onClick={() => {
+          try {
+            localStorage.removeItem('grither_admin_token');
+            localStorage.removeItem('grither_admin_role');
+            localStorage.removeItem('adminLoginData');
+          } finally {
+            window.location.href = '/';
+          }
+        }}
         className="icon-btn text-sm"
         title="Выйти из админки"
       >
@@ -294,8 +296,8 @@ export function AdminPanel({
       </button>
     </div>
   </div>
-  {/* Если используете нижнюю навигацию — оставим её на следующий шаг */}
 </header>
+
 
 
       {/* КОНТЕНТ */}
