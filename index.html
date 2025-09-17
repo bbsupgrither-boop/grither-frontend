@@ -10,61 +10,73 @@
 
     <script>
 (function () {
-  const API_BASE = (window?.import?.meta && window.import.meta.env?.VITE_API_BASE_URL) || "https://hui-production.up.railway.app";
+  const API_BASE =
+    (window?.import?.meta && window.import.meta.env?.VITE_API_BASE_URL) ||
+    "https://hui-production.up.railway.app";
 
-  // маленький помощник: находит в модалке элементы
   function findAdminModalElements(root) {
-    // Поле ID: сначала пробуем input[type=number], потом по placeholder/label
+    // Поля
     const idInput =
       root.querySelector('input[type="number"]') ||
       [...root.querySelectorAll('input,textarea')].find(el =>
-        /telegram\s*id|id/i.test(el.placeholder || el.ariaLabel || "")
+        /telegram\s*id|^id$/i.test(el.placeholder || el.ariaLabel || el.name || "")
       );
 
-    // Поле пароль: input[type=password] или по placeholder/label
     const passInput =
       root.querySelector('input[type="password"]') ||
       [...root.querySelectorAll('input,textarea')].find(el =>
-        /парол|password|код доступа/i.test(el.placeholder || el.ariaLabel || "")
+        /(парол|password|код\s*доступа)/i.test(el.placeholder || el.ariaLabel || el.name || "")
       );
 
-    // Кнопка войти: по тексту
+    // Кнопка «Войти в админку»
     const loginBtn =
       [...root.querySelectorAll('button,[role="button"],input[type="submit"]')].find(el =>
-        /войти|login|админ/i.test((el.innerText || el.value || "").trim())
+        /(войти\s*в\s*админку|войти|login)/i.test((el.innerText || el.value || "").trim())
       );
 
-    // Блок для ошибок (если есть) — иначе создадим сами
+    // Контейнер для ошибки (если нет — создадим под кнопкой)
     let errorBox =
       root.querySelector('[data-admin-error]') ||
-      [...root.querySelectorAll('*')].find(el => /ошиб|error/i.test(el.className || el.id || ""));
-
-    if (!errorBox) {
-      errorBox = document.createElement('div');
-      errorBox.setAttribute('data-admin-error', '1');
-      errorBox.style.cssText = "color:#c00;font-size:12px;margin-top:8px;";
-      // вставим рядом с кнопкой
-      loginBtn && loginBtn.parentElement && loginBtn.parentElement.appendChild(errorBox);
+      [...root.querySelectorAll('*')].find(el => /error|ошиб/i.test(el.className || el.id || ""));
+    if (!errorBox && loginBtn && loginBtn.parentElement) {
+      errorBox = document.createElement("div");
+      errorBox.setAttribute("data-admin-error", "1");
+      errorBox.style.cssText = "color:#ff6b6b;font-size:12px;margin-top:8px;";
+      loginBtn.parentElement.appendChild(errorBox);
     }
 
     return { idInput, passInput, loginBtn, errorBox };
   }
 
-  // навешиваем обработчик один раз
+  // Снимаем старые слушатели Фигмы: клонируем кнопку и подменяем её
+  function stripHandlers(el) {
+    const clone = el.cloneNode(true);
+    el.parentNode && el.parentNode.replaceChild(clone, el);
+    return clone;
+  }
+
   function attachLoginHandler(modalRoot) {
     const { idInput, passInput, loginBtn, errorBox } = findAdminModalElements(modalRoot);
     if (!idInput || !passInput || !loginBtn) return false;
-    if (loginBtn.__gritherBound) return true; // уже навешан
+    if (loginBtn.__gritherBound) return true;
+
+    // Удаляем встроенные обработчики фигмы
+    const btn = stripHandlers(loginBtn);
 
     async function doLogin(e) {
       e?.preventDefault?.();
-      errorBox && (errorBox.textContent = "");
+      e?.stopPropagation?.();
+      e?.stopImmediatePropagation?.();
+
+      if (errorBox) errorBox.textContent = "";
+
       const idNum = Number(String(idInput.value || "").trim());
       const pwd = String(passInput.value || "").trim();
       if (!idNum || !pwd) {
         if (errorBox) errorBox.textContent = "Введите Telegram ID и пароль";
         return;
       }
+
       try {
         const rsp = await fetch(`${API_BASE}/api/admin/login`, {
           method: "POST",
@@ -73,48 +85,57 @@
         });
         const data = await rsp.json().catch(() => ({}));
         if (!rsp.ok || !data?.ok) {
-          if (errorBox) errorBox.textContent = (data?.error === "bad_credentials")
-            ? "Неверный ID или пароль"
-            : "Ошибка входа";
+          if (errorBox) errorBox.textContent =
+            data?.error === "bad_credentials" ? "Неверный ID или пароль" : "Ошибка входа";
           return;
         }
         localStorage.setItem("grither_admin_token", data.token);
         localStorage.setItem("grither_admin_role", data.role);
-        // можно закрыть модалку — пробуем кликнуть по кнопке закрытия, если есть
-        const closeBtn = modalRoot.querySelector('[data-close], [aria-label="Close"], .close, [data-state="open"]~button');
-        closeBtn && closeBtn.click();
-        // уведомим приложение (если кто-то слушает)
+
+        // Закрыть модалку — кликаем по крестику, если есть
+        const closeBtn =
+          modalRoot.querySelector('[aria-label="Close"], [data-dialog-close], .close, [data-state="open"]~button');
+        if (closeBtn) closeBtn.click();
+
+        // Сообщим приложению (если кто-то слушает)
         window.dispatchEvent(new CustomEvent("grither:admin:login", { detail: { role: data.role } }));
       } catch {
         if (errorBox) errorBox.textContent = "Сеть недоступна";
       }
     }
 
-    loginBtn.addEventListener('click', doLogin);
-    passInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(e); });
-    loginBtn.__gritherBound = true;
+    // Навешиваем наш обработчик
+    btn.addEventListener("click", doLogin, { capture: true });
+    passInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(e); }, { capture: true });
+    btn.__gritherBound = true;
+
+    // Блокируем submit формы фигмы, если он есть
+    const form = btn.closest("form");
+    if (form && !form.__gritherBound) {
+      form.addEventListener("submit", (e) => { e.preventDefault(); e.stopPropagation(); doLogin(e); }, { capture: true });
+      form.__gritherBound = true;
+    }
+
     return true;
   }
 
-  // Следим за появлением модалки в DOM
+  // Следим за появлением модалки
   const obs = new MutationObserver((muts) => {
     for (const m of muts) {
       for (const node of m.addedNodes) {
         if (!(node instanceof HTMLElement)) continue;
-        // ищем большие оверлеи/диалоги
-        if (node.matches?.('dialog,[role="dialog"],[data-state="open"],.fixed,.modal,.overlay')) {
+        if (node.matches?.('dialog,[role="dialog"],[data-state="open"],.modal,.overlay,.fixed')) {
           attachLoginHandler(node);
         }
-        // и глубже
-        node.querySelectorAll?.('dialog,[role="dialog"],[data-state="open"],.fixed,.modal,.overlay')
+        node.querySelectorAll?.('dialog,[role="dialog"],[data-state="open"],.modal,.overlay,.fixed')
           .forEach(el => attachLoginHandler(el));
       }
     }
   });
-
   obs.observe(document.documentElement, { childList: true, subtree: true });
 })();
 </script>
+
 
     
     <body>
