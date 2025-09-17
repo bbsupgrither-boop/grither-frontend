@@ -8,26 +8,68 @@
       <title>Макет приложения для Telegram (Copy) (Copy)</title>
     </head>
 
-    <script>
+   <script>
 (function () {
   const API_BASE =
     (window?.import?.meta && window.import.meta.env?.VITE_API_BASE_URL) ||
     window.VITE_API_BASE_URL ||
     "https://hui-production.up.railway.app";
 
-  // 1) Глушим старый alert про «Неверный код доступа», чтобы он не мешал
+  const LS_TOKEN_KEY = "grither_admin_token";
+  const LS_ROLE_KEY  = "grither_admin_role";
+  const LS_AUTOGO    = "grither_admin_autogo";
+
+  // ── 0) Автопереход в админку после перезагрузки
+  function tryOpenAdminTab() {
+    // 1) пробуем через hash
+    try { if (!location.hash || !/#admin/i.test(location.hash)) location.hash = "#admin"; } catch {}
+    // 2) пробуем кликнуть по элементам с текстом «Админ»
+    const candidates = [
+      ...document.querySelectorAll('a,button,[role="button"],[data-route],[data-tab]')
+    ].filter(el => /админ|admin/i.test((el.innerText || el.getAttribute?.("aria-label") || el.getAttribute?.("title") || "").trim()));
+    if (candidates[0]) { try { candidates[0].click(); } catch {} }
+    // 3) шлём событие (если приложение его слушает)
+    try { window.dispatchEvent(new CustomEvent("grither:goto-admin")); } catch {}
+  }
+
+  function scheduleAutoGoIfNeeded() {
+    try {
+      const token = localStorage.getItem(LS_TOKEN_KEY);
+      const auto  = localStorage.getItem(LS_AUTOGO) === "1";
+      if (!token || !auto) return;
+      // несколько попыток в течение 2 сек (пока приложение монтируется)
+      const started = Date.now();
+      const timer = setInterval(() => {
+        tryOpenAdminTab();
+        if (Date.now() - started > 2000) {
+          clearInterval(timer);
+          localStorage.removeItem(LS_AUTOGO);
+        }
+      }, 200);
+      // если получится раньше — снимаем флаг через 1 сек
+      setTimeout(() => localStorage.removeItem(LS_AUTOGO), 1200);
+    } catch {}
+  }
+
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    scheduleAutoGoIfNeeded();
+  } else {
+    window.addEventListener("DOMContentLoaded", scheduleAutoGoIfNeeded);
+  }
+
+  // ── 1) Блокируем старый alert «Неверный код доступа»
   const nativeAlert = window.alert;
   window.alert = function (msg) {
     try {
       if (typeof msg === "string" && /неверн(ый|ая).*(код|доступ)/i.test(msg)) {
         console.warn("[admin] blocked legacy alert:", msg);
-        return; // проглатываем
+        return;
       }
     } catch {}
     return nativeAlert.apply(this, arguments);
   };
 
-  // 2) Находим элементы в модалке
+  // ── 2) Поиск элементов в модалке
   function findEls(root) {
     const idInput =
       root.querySelector('input[type="number"]') ||
@@ -55,11 +97,10 @@
       errorBox.style.cssText = "color:#ff6b6b;font-size:12px;margin-top:8px;";
       loginBtn.parentElement.appendChild(errorBox);
     }
-
     return { idInput, passInput, loginBtn, errorBox };
   }
 
-  // 3) Логин: общий обработчик
+  // ── 3) Логин на бэк
   async function doLogin(modalRoot, idInput, passInput, errorBox, btn) {
     if (errorBox) { errorBox.style.color = "#ff6b6b"; errorBox.textContent = ""; }
 
@@ -83,9 +124,10 @@
         return;
       }
 
-      // успех
-      localStorage.setItem("grither_admin_token", data.token);
-      localStorage.setItem("grither_admin_role", data.role);
+      // успех: сохраняем токен/роль и ставим флажок автоперехода
+      localStorage.setItem(LS_TOKEN_KEY, data.token);
+      localStorage.setItem(LS_ROLE_KEY,  data.role);
+      localStorage.setItem(LS_AUTOGO,   "1");
       if (errorBox) { errorBox.style.color = "#0a7c2f"; errorBox.textContent = "Вход выполнен. Роль: " + data.role; }
 
       // закрыть модалку
@@ -109,12 +151,11 @@
     }
   }
 
-  // 4) Агрессивный перехват клика: на уровне документа (capture), раньше Фигмы
+  // ── 4) Жёсткий перехват клика по кнопке «Войти» (раньше Фигмы)
   document.addEventListener("click", function onDocClick(e) {
     const target = e.target;
     if (!(target instanceof HTMLElement)) return;
 
-    // Ищем ближайший диалог/оверлей и кнопку «Войти»
     const modalRoot = target.closest('dialog,[role="dialog"],[data-state="open"],.modal,.overlay,.fixed') || document.body;
     const { idInput, passInput, loginBtn, errorBox } = findEls(modalRoot);
     if (!loginBtn) return;
@@ -122,23 +163,12 @@
     const isLoginBtn = target === loginBtn || loginBtn.contains(target);
     if (!isLoginBtn) return;
 
-    // Останавливаем ВСЁ и логиним сами
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-
-    // делаем кнопку активной, если Фигма её глушит
-    try {
-      loginBtn.removeAttribute("disabled");
-      loginBtn.removeAttribute("aria-disabled");
-      loginBtn.style.pointerEvents = "auto";
-      loginBtn.style.opacity = "";
-    } catch {}
-
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    try { loginBtn.removeAttribute("disabled"); loginBtn.removeAttribute("aria-disabled"); loginBtn.style.pointerEvents = "auto"; loginBtn.style.opacity = ""; } catch {}
     doLogin(modalRoot, idInput, passInput, errorBox, loginBtn);
-  }, true); // <<< capture = true
+  }, true);
 
-  // 5) Перехватываем Enter в поле пароля (capture)
+  // ── 5) Перехват Enter в поле пароля
   document.addEventListener("keydown", function onKey(e) {
     if (e.key !== "Enter") return;
     const active = document.activeElement;
@@ -151,9 +181,9 @@
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
     doLogin(modalRoot, idInput, passInput, errorBox, loginBtn);
   }, true);
-
 })();
 </script>
+
 
 
 
